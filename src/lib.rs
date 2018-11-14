@@ -16,11 +16,31 @@ pub struct Config {
 }
 
 impl Config {
+    pub fn new(mut args: env::Args) -> Result<Config, &'static str> {
+        ///
+        // let args: Vec<String> = env::args().collect();
+        // println!("{:?}", args);
+        // let query = &args[1];
+        // let filename = &args[2];
+        ///
+
+        println!("{:?}", args.next());
+        let username = match args.next() {
+            None => return Err("No username provided"),
+            Some(arg) => arg,
+        };
+
+        let token = args.next();
+        Ok(Config { username, token })
+    }
+
+    //why is this fcn optional??
     fn url(self) -> Option<String> {
+        // format with {} 
         Some(format!(
-            "https://api.github.com/users/{}/starred",
+            "https://api.github.com/users/{}/starred",              
             self.username
-        ))
+        ))          //if authenticated, should be a different link... https://developer.github.com/v3/activity/starring/ 'List Repos being starred' - starred by authenticated user
     }
 }
 
@@ -38,15 +58,22 @@ struct ClientBuilder {
     inner: reqwest::ClientBuilder,
     headers: reqwest::header::Headers,
 }
-
+//client builder can be used to create a client with custom config
 impl ClientBuilder {
+    //constructs client builder
     fn new() -> ClientBuilder {
+
+        //A map of header fields on requests and responses - new = new empty deaders map
         let mut headers = reqwest::header::Headers::new();
+
+        //order x matter, set a header field
+        //sets Accept header (indicated to do so in github API)
         headers.set(Accept(vec![qitem(
             "application/vnd.github.v3.star+json".parse().unwrap(),
-        )]));
-        headers.set(UserAgent::new("supernova/0.1.0"));
+        )]));       //specify api version- github requires this be done in request Accept header
+        headers.set(UserAgent::new("supernova/0.1.0")); //all github api requests must invlude a valid user agent
 
+        // returns new clientbuilder with inner and headers
         ClientBuilder {
             inner: reqwest::ClientBuilder::new(),
             headers,
@@ -59,7 +86,7 @@ impl ClientBuilder {
     }
 
     fn set_authorization_token(&mut self, token: String) -> &mut ClientBuilder {
-        self.headers.set(Authorization(Bearer { token }));
+        self.headers.set(Authorization(Bearer { token }));      //Authorization header allows user agent to authenticate itself
         self
     }
 }
@@ -98,32 +125,37 @@ impl fmt::Display for Repository {
 }
 
 pub fn collect_stars(config: Config) -> Result<(), Box<dyn error::Error>> {
+    //new client builder (use to create a client with custom config)
     let mut builder = ClientBuilder::new();
 
+    // match config.token to token; if no token, do nothing. if token, call fcn to set authorization header
     if let Some(ref token) = config.token {
         builder.set_authorization_token(token.to_owned());
     }
 
-    let client = builder.build()?;
+
+    let client = builder.build()?;      //is there a point in this question mark if we never check client? https://m4rw3r.github.io/rust-questionmark-operator and if client never returns err...
 
     let mut stars: Vec<Star> = Vec::new();
 
-    let mut next_link = config.url();
+    let mut next_link = config.url();   //returns api call url with username (why called next_link?)
 
     while next_link.is_some() {
         if let Some(link) = next_link {
             let mut res = client.get(&link).send()?;
+            println!("{:?}", res.headers());
             next_link = extract_link_next(res.headers());
-
+            //println!("{:?}", next_link);
             let mut s: Vec<Star> = res.json()?;
             stars.append(&mut s);
         }
     }
 
-    for star in stars.iter() {
-        println!("{}", star);
-    }
+    // for star in stars.iter() {
+    //     println!("{}", star);
+    // }
     println!("Collected {} stars", stars.len());
+    //println!("{} requests left until {}", stars.len());
 
     Ok(())
 }
