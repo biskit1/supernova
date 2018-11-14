@@ -133,7 +133,7 @@ pub fn collect_stars(config: Config) -> Result<(), Box<dyn error::Error>> {
         builder.set_authorization_token(token.to_owned());
     }
 
-
+    //returns Client
     let client = builder.build()?;      //is there a point in this question mark if we never check client? https://m4rw3r.github.io/rust-questionmark-operator and if client never returns err...
 
     let mut stars: Vec<Star> = Vec::new();
@@ -142,11 +142,12 @@ pub fn collect_stars(config: Config) -> Result<(), Box<dyn error::Error>> {
 
     while next_link.is_some() {
         if let Some(link) = next_link {
-            let mut res = client.get(&link).send()?;
-            println!("{:?}", res.headers());
-            next_link = extract_link_next(res.headers());
-            //println!("{:?}", next_link);
-            let mut s: Vec<Star> = res.json()?;
+            let mut res = client.get(&link).send()?;    //get- makes get request to URL (link) (returns RequestBuilder, a builder to construct the properties of a Request, like: add header, modify query string, etc.)
+            //send constructs the Request and sends it to the target URL, returns a Response
+            //println!("{:?}", res.headers());
+            // add if res.status().is_success() { ... } https://docs.rs/reqwest/0.8.6/reqwest/struct.Response.html
+            next_link = extract_link_next(res.headers());   //get headers from the Response, and call fcn to
+            let mut s: Vec<Star> = res.json()?; //deserialize response body as JSON
             stars.append(&mut s);
         }
     }
@@ -161,14 +162,13 @@ pub fn collect_stars(config: Config) -> Result<(), Box<dyn error::Error>> {
 }
 
 fn extract_link_next(headers: &reqwest::header::Headers) -> Option<String> {
-    let link_headers = headers.get::<Link>();
-
+    let link_headers = headers.get::<Link>();       //extract the Link header
     match link_headers {
         None => None,
         Some(links) => links
-            .values()
-            .iter()
-            .find(|&val| {
+            .values()           //get Link headers LinkValues
+            .iter()             // returns an iterator over the header fields 
+            .find(|&val| {      
                 val.rel().map_or(false, |rel| {
                     rel.first()
                         .map_or(false, |rel_type| rel_type == &RelationType::Next)
