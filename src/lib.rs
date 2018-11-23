@@ -16,24 +16,6 @@ pub struct Config {
 }
 
 impl Config {
-    pub fn new(mut args: env::Args) -> Result<Config, &'static str> {
-        ///
-        // let args: Vec<String> = env::args().collect();
-        // println!("{:?}", args);
-        // let query = &args[1];
-        // let filename = &args[2];
-        ///
-
-        println!("{:?}", args.next());
-        let username = match args.next() {
-            None => return Err("No username provided"),
-            Some(arg) => arg,
-        };
-
-        let token = args.next();
-        Ok(Config { username, token })
-    }
-
     //why is this fcn optional??
     fn url(self) -> Option<String> {
         // format with {} 
@@ -132,6 +114,9 @@ pub fn collect_stars(config: Config) -> Result<(), Box<dyn error::Error>> {
     if let Some(ref token) = config.token {
         builder.set_authorization_token(token.to_owned());
     }
+    else {
+        println!("no auth token provided");
+    }
 
     //returns Client
     let client = builder.build()?;      //is there a point in this question mark if we never check client? https://m4rw3r.github.io/rust-questionmark-operator and if client never returns err...
@@ -144,10 +129,10 @@ pub fn collect_stars(config: Config) -> Result<(), Box<dyn error::Error>> {
         if let Some(link) = next_link {
             let mut res = client.get(&link).send()?;    //get- makes get request to URL (link) (returns RequestBuilder, a builder to construct the properties of a Request, like: add header, modify query string, etc.)
             //send constructs the Request and sends it to the target URL, returns a Response
-            println!("{:?}", res.headers());
+            println!("HEADERS: {:?}", res.headers());
             // add if res.status().is_success() { ... } https://docs.rs/reqwest/0.8.6/reqwest/struct.Response.html
-            next_link = extract_link_next(res.headers());   //get headers from the Response, and call fcn to
-            println!("{:?}", next_link);
+            next_link = extract_link_next(res.headers());   //get headers from the Response, and call fcn to get new page to call (Some("https://api.github.com/user/55398/starred?page=2"))
+            //println!("NEXTLINK: {:?}", next_link);
             let mut s: Vec<Star> = res.json()?; //deserialize response body as JSON
             stars.append(&mut s);
         }
@@ -164,14 +149,14 @@ pub fn collect_stars(config: Config) -> Result<(), Box<dyn error::Error>> {
 
 fn extract_link_next(headers: &reqwest::header::Headers) -> Option<String> {
     let link_headers = headers.get::<Link>();       //extract the Link header
-    println!("here"); //printed 
+    //println!("here- link headers<LINK>: {:?}", link_headers); //printed 
     match link_headers {
         None => None,
         Some(links) => links
             .values()           //get Link headers LinkValues
             .iter()             // returns an iterator over the header fields 
             .find(|&val| {   
-                println!("val: {:?}", val);   
+                //println!("val: {:?}", val);   // Link values
                 val.rel().map_or(false, |rel| {
                     rel.first()
                         .map_or(false, |rel_type| rel_type == &RelationType::Next)
